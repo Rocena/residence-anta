@@ -5,11 +5,11 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { useRouter, usePathname } from 'next/navigation';
 
 const INITIAL_USERS = [
-  { id: "1", name: "Admin ANTA", email: "admin@anta.app", role: "admin", password: "password", avatar: "AD", twoFactorEnabled: false },
-  { id: "2", name: "Tévi ADABUNU", email: "tevi@anta.app", role: "proprietaire", password: "password", avatar: "TA", twoFactorEnabled: false },
-  { id: "3", name: "Véronique", email: "veronique@anta.app", role: "gestionnaire", password: "password", avatar: "VE", twoFactorEnabled: false },
-  { id: "4", name: "Jean KPERI", email: "jean@anta.app", role: "gestionnaire", password: "password", avatar: "JK", twoFactorEnabled: false },
-  { id: "5", name: "Calvin NZUE", email: "calvin@anta.app", role: "intendant", password: "password", avatar: "CN", twoFactorEnabled: false },
+  { id: "1", name: "Admin ANTA", email: "admin@anta.app", role: "admin", passwordHash: "[REDACTED]", avatar: "AD", twoFactorEnabled: false },
+  { id: "2", name: "Tévi ADABUNU", email: "tevi@anta.app", role: "proprietaire", passwordHash: "[REDACTED]", avatar: "TA", twoFactorEnabled: false },
+  { id: "3", name: "Véronique", email: "veronique@anta.app", role: "gestionnaire", passwordHash: "[REDACTED]", avatar: "VE", twoFactorEnabled: false },
+  { id: "4", name: "Jean KPERI", email: "jean@anta.app", role: "gestionnaire", passwordHash: "[REDACTED]", avatar: "JK", twoFactorEnabled: false },
+  { id: "5", name: "Calvin NZUE", email: "calvin@anta.app", role: "intendant", passwordHash: "[REDACTED]", avatar: "CN", twoFactorEnabled: false },
 ];
 
 const ALL_MODULES = [
@@ -336,7 +336,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const addUser = (userData: any) => {
     const newUser = {
       id: Date.now().toString(),
-      password: "password", // default
+      passwordHash: "[REDACTED]", // default
       avatar: userData.name.substring(0, 2).toUpperCase(),
       twoFactorEnabled: false,
       permissions: (rolePermissionsDb[userData.role] || ROLE_PERMISSIONS[userData.role]) || [],

@@ -42,3 +42,8 @@ next-env.d.ts
 
 # Local database
 data.json
+
+# Local env files
+.env
+.env.local
+.env.*.local
