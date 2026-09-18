@@ -21,14 +21,14 @@ export default function TenantsClient({ initialTenants, units }: { initialTenant
     const fd = new FormData(e.target as HTMLFormElement);
     const name = fd.get("name") as string;
     await addTenantAction(fd);
-    logActivity("Nouveau locataire", `${name} a été ajouté.`);
+    logActivity("Nouveau locataire", `${name} a été ajoutéé.`);
     setIsSaving(false);
     setShowAddModal(false);
   };
 
   const handleUpdateStatus = async (id: string, name: string, status: string) => {
     await updateTenantStatusAction(id, status);
-    logActivity("Statut modifié", `Le statut de ${name} est passé  ${status}.`);
+    logActivity("Statut modifiéé", `Le statut de ${name} est passéé  ${status}.`);
     setActiveDropdown(null);
   };
 
@@ -49,7 +49,7 @@ export default function TenantsClient({ initialTenants, units }: { initialTenant
         return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20';
       case 'En défaut':
         return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20';
-      case 'Archivé':
+      case 'Archivéé':
         return 'bg-neutral-50 text-neutral-700 border-neutral-200 dark:bg-neutral-500/10 dark:text-neutral-400 dark:border-neutral-500/20';
       default:
         return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20';
@@ -60,15 +60,15 @@ export default function TenantsClient({ initialTenants, units }: { initialTenant
     switch (status) {
       case 'Actif': return 'bg-emerald-500';
       case 'En défaut': return 'bg-rose-500';
-      case 'Archivé': return 'bg-neutral-500';
+      case 'Archivéé': return 'bg-neutral-500';
       default: return 'bg-blue-500';
     }
   };
 
   const filteredTenants = initialTenants.filter(t => {
-    const isArchived = t.status === 'Archivé';
-    if (activeTab === 'actifs' && isArchived) return false;
-    if (activeTab === 'archives' && !isArchived) return false;
+    const isArchivéed = t.status === 'Archivéé';
+    if (activeTab === 'actifs' && isArchivéed) return false;
+    if (activeTab === 'archives' && !isArchivéed) return false;
 
     return t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
            t.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -153,7 +153,7 @@ export default function TenantsClient({ initialTenants, units }: { initialTenant
                     : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
                 }`}
               >
-                Corbeille (Archives)
+                Corbeille (Archivées)
               </button>
             </div>
             
@@ -232,7 +232,7 @@ export default function TenantsClient({ initialTenants, units }: { initialTenant
                           
                           {activeDropdown === tenant.id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-800 z-10 py-1">
-                              {tenant.status === 'Archivé' ? (
+                              {tenant.status === 'Archivéé' ? (
                                 <button onClick={() => handleUpdateStatus(tenant.id, tenant.name, 'Actif')} className="w-full text-left px-4 py-2 text-sm text-emerald-600 hover:bg-neutral-50 dark:hover:bg-neutral-800">
                                   Réintégrer comme Actif
                                 </button>
@@ -248,7 +248,7 @@ export default function TenantsClient({ initialTenants, units }: { initialTenant
                                     </button>
                                   )}
                                   <button onClick={() => handleDelete(tenant.id, tenant.name)} className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-neutral-50 dark:hover:bg-neutral-800">
-                                    Archiver (Corbeille)
+                                    Archivéer (Corbeille)
                                   </button>
                                 </>
                               )}

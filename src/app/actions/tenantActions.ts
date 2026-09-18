@@ -6,8 +6,9 @@ import { addTenant, updateTenantStatus, deleteTenant } from "@/lib/db";
 export async function addTenantAction(formData: FormData) {
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
+  const phone = formData.get("phone") as string;
   
-  addTenant({ name, email });
+  addTenant({ name, email, phone });
   revalidatePath("/tenants");
   revalidatePath("/residence");
 }

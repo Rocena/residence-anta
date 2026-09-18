@@ -6,12 +6,12 @@ const DB_FILE = path.join(process.cwd(), 'data.json');
 // Default initial state
 const defaultData = {
   units: [
-    { id: '1', name: 'Appartement A1', type: 'T2', status: 'Occupé', rent: 650000 },
+    { id: '1', name: 'Appartement A1', type: 'T2', status: 'Occupéé', rent: 650000 },
     { id: '2', name: 'Chambre 12', type: 'Chambre', status: 'Libre', rent: 300000 }
   ],
   tenants: [],
   rents: [
-    { id: '1', tenantId: '1', amount: 650000, status: 'Payé', date: '2026-09-01', month: '2026-09' },
+    { id: '1', tenantId: '1', amount: 650000, status: 'Payéé', date: '2026-09-01', month: '2026-09' },
     { id: '2', tenantId: '1', amount: 650000, status: 'En attente', date: '2026-10-01', month: '2026-10' }
   ],
     rolePermissions: {
@@ -119,7 +119,7 @@ export function assignTenant(tenantId: string, unitId: string, rent: number, lea
     
     // update unit
     const unit = db.units.find((u: any) => u.id === unitId || u.name === unitId);
-    if (unit) unit.status = 'OccupǸ';
+    if (unit) unit.status = 'Occupéé';
     
     writeDB(db);
   }
@@ -149,7 +149,7 @@ export function deleteTenant(tenantId: string) {
   const db = readDB();
   const tenant = db.tenants.find((t: any) => t.id === tenantId);
   if (tenant) {
-    tenant.status = 'Archivé';
+    tenant.status = 'Archivéé';
     // Free the unit if occupied
     if (tenant.unitId) {
       const unit = db.units.find((u: any) => u.id === tenant.unitId);
@@ -183,7 +183,7 @@ export function payRentAmount(id: string, amount: number, paymentDate: string) {
     rent.paymentDates.push(paymentDate);
 
     if (rent.balance <= 0) {
-      rent.status = 'Payé';
+      rent.status = 'Payéé';
       rent.balance = 0;
     } else {
       rent.status = 'Partiellement payé';
@@ -352,12 +352,12 @@ export function updateSalary(id: string, updates: any) {
 export function updateSalariesStatus() {
   const db = readDB();
   if (!db.salaries) db.salaries = [];
-  let modified = false;
+  let modifiéed = false;
 
   for (let salary of db.salaries) {
-    if (salary.status === 'Bloqué' || salary.status === 'BloquǸ') {
+    if (salary.status === 'Bloquéé' || salary.status === 'Bloquéé') {
       const activeTenants = db.tenants.filter((t: any) => t.status === 'Actif');
-      const rentsForMonth = db.rents.filter((r: any) => r.month === salary.month && (r.status === 'Payé' || r.status === 'PayǸ'));
+      const rentsForMonth = db.rents.filter((r: any) => r.month === salary.month && (r.status === 'Payéé' || r.status === 'Payéé'));
       
       const allPaid = activeTenants.length > 0 && activeTenants.every((t: any) => 
         rentsForMonth.some((r: any) => r.tenantId === t.id)
@@ -365,12 +365,12 @@ export function updateSalariesStatus() {
 
       if (allPaid) {
         salary.status = 'Autorisé';
-        modified = true;
+        modifiéed = true;
       }
     }
   }
 
-  if (modified) {
+  if (modifiéed) {
     writeDB(db);
   }
 }
@@ -389,7 +389,7 @@ export function processRecurringExpenses() {
     { title: "Électricité", category: "Facture", amount: 30000, isRecurring: true }
   ];
 
-  let modified = false;
+  let modifiéed = false;
 
   // Process standard recurring
   for (const template of recurring) {
@@ -402,7 +402,7 @@ export function processRecurringExpenses() {
         status: "En attente",
         ...template
       });
-      modified = true;
+      modifiéed = true;
     }
   }
 
@@ -410,7 +410,7 @@ export function processRecurringExpenses() {
   const salaryExists = db.salaries.some((s: any) => s.month === currentMonth);
   if (!salaryExists) {
     const activeTenants = db.tenants.filter((t: any) => t.status === 'Actif');
-    const rentsForMonth = db.rents.filter((r: any) => r.month === currentMonth && (r.status === 'Payé' || r.status === 'PayǸ'));
+    const rentsForMonth = db.rents.filter((r: any) => r.month === currentMonth && (r.status === 'Payéé' || r.status === 'Payéé'));
     
     const allPaid = activeTenants.length > 0 && activeTenants.every((t: any) => 
       rentsForMonth.some((r: any) => r.tenantId === t.id)
@@ -420,13 +420,13 @@ export function processRecurringExpenses() {
       id: 'SAL-' + Date.now().toString(),
       month: currentMonth,
       amount: 100000,
-      status: allPaid ? 'Autorisé' : 'Bloqué',
+      status: allPaid ? 'Autorisé' : 'Bloquéé',
       rentThreshold: 100
     });
-    modified = true;
+    modifiéed = true;
   }
 
-  if (modified) {
+  if (modifiéed) {
     writeDB(db);
   }
 }

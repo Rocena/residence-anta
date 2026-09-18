@@ -90,8 +90,8 @@ export default function ReportsPage() {
     
     doc.setFontSize(12);
     doc.setTextColor(0,0,0);
-    doc.text("Encaissements (Loyers):", 14, startY);
-    const rents = data.rents.filter((r: any) => r.status && r.status.startsWith('Pay'));
+    doc.text("Encaisséements (Loyers):", 14, startY);
+    const rents = data.rents.filter((r: any) => r.status && r.status.startsWith('Payé'));
     
     autoTable(doc, {
       startY: startY + 5,
@@ -120,12 +120,12 @@ export default function ReportsPage() {
 
     doc.setFontSize(12);
     doc.setTextColor(0,0,0);
-    doc.text("Dépenses (Payées):", 14, finalY);
-    const expenses = data.expenses.filter((e: any) => e.status && e.status.startsWith('Pay'));
+    doc.text("Dépenses (Payéées):", 14, finalY);
+    const expenses = data.expenses.filter((e: any) => e.status && e.status.startsWith('Payé'));
     
     autoTable(doc, {
       startY: finalY + 5,
-      head: [['Date', 'Description', 'Montant', 'Payé Par']],
+      head: [['Date', 'Description', 'Montant', 'Payéé Par']],
       body: expenses.map((e: any) => [
         e.date,
         e.description,
@@ -143,7 +143,7 @@ const generateFinancialExcel = () => {
     if (!data) return;
     const wb = XLSX.utils.book_new();
 
-    const rents = data.rents.filter((r: any) => r.status && r.status.startsWith('Pay')).map((r: any) => {
+    const rents = data.rents.filter((r: any) => r.status && r.status.startsWith('Payé')).map((r: any) => {
       const tenant = data.tenants.find((t: any) => t.id === r.tenantId);
       const unit = tenant ? data.units.find((u: any) => u.id === tenant.unitId) : null;
       return {
@@ -155,13 +155,13 @@ const generateFinancialExcel = () => {
       };
     });
     const wsRents = XLSX.utils.json_to_sheet(rents);
-    XLSX.utils.book_append_sheet(wb, wsRents, "Encaissements");
+    XLSX.utils.book_append_sheet(wb, wsRents, "Encaisséements");
 
-    const expenses = data.expenses.filter((e: any) => e.status && e.status.startsWith('Pay')).map((e: any) => ({
+    const expenses = data.expenses.filter((e: any) => e.status && e.status.startsWith('Payé')).map((e: any) => ({
       Date: e.date,
       Description: e.description,
       Montant: e.amount,
-      Paye_Par: e.paidBy
+      Payée_Par: e.paidBy
     }));
     const wsExpenses = XLSX.utils.json_to_sheet(expenses);
     XLSX.utils.book_append_sheet(wb, wsExpenses, "Dépenses");
@@ -175,7 +175,7 @@ const generateFinancialExcel = () => {
     const doc = new jsPDF();
     const startY = addProfessionalHeader(doc, "Rapport des Impayés");
     
-    const unpaids = data.rents.filter((r: any) => (!r.status || !r.status.startsWith('Pay')));
+    const unpaids = data.rents.filter((r: any) => (!r.status || !r.status.startsWith('Payé')));
     
     autoTable(doc, {
       startY: startY + 5,
@@ -202,7 +202,7 @@ const generateUnpaidExcel = () => {
     if (!data) return;
     const wb = XLSX.utils.book_new();
 
-    const unpaids = data.rents.filter((r: any) => (!r.status || !r.status.startsWith('Pay'))).map((r: any) => {
+    const unpaids = data.rents.filter((r: any) => (!r.status || !r.status.startsWith('Payé'))).map((r: any) => {
       const tenant = data.tenants.find((t: any) => t.id === r.tenantId);
       const unit = tenant ? data.units.find((u: any) => u.id === tenant.unitId) : null;
       return {
@@ -219,18 +219,18 @@ const generateUnpaidExcel = () => {
     XLSX.writeFile(wb, "Impayes.xlsx");
   };
 
-  const handleGenerateArchive = async () => {
+  const handleGenerateArchivée = async () => {
     setIsGenerating(true);
     try {
       const zip = new JSZip();
-      zip.file("LISEZMOI.txt", `Archive comptable ANTA Management\nContient les bilans financiers et factures.`);
+      zip.file("LISEZMOI.txt", `Archivée comptable ANTA Management\nContient les bilans financiers et factures.`);
       
       if (data) {
         const doc = new jsPDF();
         doc.text("Bilan Annuel Global", 14, 20);
-        const totalRents = data.rents.filter((r:any) => r.status && r.status.startsWith('Pay')).reduce((acc:any, r:any) => acc + r.amount, 0);
-        const totalExpenses = data.expenses.filter((e:any) => e.status && e.status.startsWith('Pay')).reduce((acc:any, e:any) => acc + e.amount, 0);
-        doc.text(`Total Encaissé: ${totalRents.toLocaleString('fr-FR')} FCFA`, 14, 30);
+        const totalRents = data.rents.filter((r:any) => r.status && r.status.startsWith('Payé')).reduce((acc:any, r:any) => acc + r.amount, 0);
+        const totalExpenses = data.expenses.filter((e:any) => e.status && e.status.startsWith('Payé')).reduce((acc:any, e:any) => acc + e.amount, 0);
+        doc.text(`Total Encaisséé: ${totalRents.toLocaleString('fr-FR')} FCFA`, 14, 30);
         doc.text(`Total Dépenses: ${totalExpenses.toLocaleString('fr-FR')} FCFA`, 14, 40);
         doc.text(`Bénéfice net: ${(totalRents - totalExpenses).toLocaleString('fr-FR')} FCFA`, 14, 50);
         
@@ -242,7 +242,7 @@ const generateUnpaidExcel = () => {
       const url = URL.createObjectURL(zipContent);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'Archive_Comptable.zip';
+      link.download = 'Archivée_Comptable.zip';
       link.click();
       URL.revokeObjectURL(url);
       
@@ -360,7 +360,7 @@ const generateUnpaidExcel = () => {
                 </div>
               </div>
               <button 
-                onClick={handleGenerateArchive}
+                onClick={handleGenerateArchivée}
                 disabled={isGenerating || isGenerated}
                 className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
                   isGenerated 
@@ -378,7 +378,7 @@ const generateUnpaidExcel = () => {
                   </>
                 ) : (
                   <>
-                    Générer l'Archive <ChevronRight className="h-4 w-4" />
+                    Générer l'Archivée <ChevronRight className="h-4 w-4" />
                   </>
                 )}
               </button>
