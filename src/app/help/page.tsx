@@ -153,7 +153,7 @@ export default function HelpPage() {
             Tutoriel Interactif
           </h2>
           <p className="text-blue-100 max-w-md text-sm leading-relaxed">
-            Découvrez module par module toutes les fonctionnalités de la plateforme grâce à notre assistant animé en 12 étapes.
+            Découvrez pas-à-pas les modules et fonctionnalités auxquels votre rôle a accès grâce à notre guide interactif personnalisé.
           </p>
         </div>
         <button 
