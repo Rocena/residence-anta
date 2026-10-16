@@ -1,0 +1,27 @@
+# Docker Compose pour Serveur de Messagerie Open-Source, Sécurisé et Illimité
+# Moteur : Stalwart Mail Server (Rust, JMAP/IMAP/SMTP, ACME TLS Let's Encrypt automatique, SPF/DKIM/DMARC)
+# Consommation : < 100 Mo de RAM, Débit illimité
+
+services:
+  mailserver:
+    image: stalwartlabs/mail-server:latest
+    container_name: anta-mailserver
+    restart: always
+    ports:
+      - "25:25"       # SMTP standard (inbound)
+      - "465:465"     # SMTPS (SMTP sécurisé avec SSL/TLS direct)
+      - "587:587"     # SMTP Submission (STARTTLS sécurisé)
+      - "993:993"     # IMAPS (IMAP sécurisé)
+      - "443:443"     # Interface d'administration Web HTTPS & JMAP
+      - "80:80"       # Challenge HTTP pour certificats Let's Encrypt
+    environment:
+      - STALWART_ADMIN_USER=admin
+      - STALWART_ADMIN_SECRET=ChangerCeMotDePasseAdminSecurise2026!
+    volumes:
+      - ./stalwart-data:/opt/stalwart-mail
+
+# Instructions de démarrage :
+# 1. Pointez vos enregistrements DNS (MX, A 'mail.votredomaine.com', SPF, DKIM) vers votre serveur
+# 2. Lancez : docker compose -f docker-compose.mailserver.yml up -d
+# 3. Accédez à l'interface web sur https://mail.votredomaine.com pour créer vos adresses
+# 4. Renseignez les identifiants SMTP dans les variables d'environnement ANTA
