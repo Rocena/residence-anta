@@ -124,9 +124,11 @@ function BackgroundSymbols() {
 
 // First-Time Setup Wizard Component
 function SetupWizard({ onCompleted }: { onCompleted: (email: string, password?: string) => void }) {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [loading, setLoading] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   // Step 1: Super Admin Credentials
   const [name, setName] = useState("");
@@ -222,6 +224,32 @@ function SetupWizard({ onCompleted }: { onCompleted: (email: string, password?: 
     }
   };
 
+  const handleDirectAccessAndTutorial = async () => {
+    setError("");
+    setLoggingIn(true);
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("anta_trigger_first_tutorial", "true");
+        localStorage.removeItem("anta_tutorial_done");
+      }
+      const res = await signIn("credentials", {
+        email: email.trim().toLowerCase(),
+        password,
+        redirect: false,
+      });
+
+      if (res?.ok) {
+        window.location.href = "/";
+      } else {
+        onCompleted(email, password);
+      }
+    } catch {
+      onCompleted(email, password);
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-lg relative z-10">
       <motion.div
@@ -235,17 +263,22 @@ function SetupWizard({ onCompleted }: { onCompleted: (email: string, password?: 
             <Logo size={48} className="flex-col" />
           </div>
           <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-            {step === 4 ? "Initialisation Réussie !" : "Configuration Initiale de la Plateforme"}
+            {step === 0 && "Initialisation de la Plateforme"}
+            {step === 1 && "Configuration du Super Administrateur"}
+            {step === 2 && "Votre Première Résidence"}
+            {step === 3 && "Vérification et Activation"}
+            {step === 4 && "Initialisation Réussie !"}
           </h2>
           <p className="text-neutral-500 dark:text-neutral-400 text-xs mt-1">
-            {step === 1 && "Étape 1 sur 3 — Création du compte Super Administrateur"}
-            {step === 2 && "Étape 2 sur 3 — Enregistrement de votre première propriété"}
-            {step === 3 && "Étape 3 sur 3 — Synthèse et activation du système"}
+            {step === 0 && "Découvrez les étapes d'installation de votre nouvel espace de gestion"}
+            {step === 1 && "Étape 1 sur 3 — Création du compte maître Super Administrateur"}
+            {step === 2 && "Étape 2 sur 3 — Enregistrement de votre premier parc immobilier"}
+            {step === 3 && "Étape 3 sur 3 — Synthèse et activation sécurisée du système"}
             {step === 4 && "Bienvenue ! Votre système est désormais opérationnel."}
           </p>
 
           {/* Stepper Progress Bar */}
-          {step < 4 && (
+          {step > 0 && step < 4 && (
             <div className="mt-5 flex items-center justify-center gap-2">
               <div className={`h-2 rounded-full transition-all duration-300 ${step >= 1 ? "w-16 bg-indigo-600" : "w-10 bg-neutral-200 dark:bg-neutral-800"}`} />
               <div className={`h-2 rounded-full transition-all duration-300 ${step >= 2 ? "w-16 bg-indigo-600" : "w-10 bg-neutral-200 dark:bg-neutral-800"}`} />
@@ -263,6 +296,76 @@ function SetupWizard({ onCompleted }: { onCompleted: (email: string, password?: 
           )}
 
           <AnimatePresence mode="wait">
+            {/* STEP 0: Introduction & Procédure complète */}
+            {step === 0 && (
+              <motion.div
+                key="step0"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                className="space-y-4"
+              >
+                <div className="text-center pb-1">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 flex items-center justify-center mx-auto mb-2.5">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-bold text-neutral-900 dark:text-white">Procédure d'installation guidée</h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto leading-relaxed">
+                    Avant de commencer, voici les 3 étapes simples pour initialiser et sécuriser votre plateforme :
+                  </p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="p-3 bg-neutral-50 dark:bg-neutral-950 rounded-2xl border border-neutral-200/70 dark:border-neutral-800 flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                      1
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900 dark:text-white">Compte Super Administrateur</h4>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                        Création du compte maître avec tous les privilèges (gestion des utilisateurs, rôles, finances, traçabilité).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-neutral-50 dark:bg-neutral-950 rounded-2xl border border-neutral-200/70 dark:border-neutral-800 flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                      2
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900 dark:text-white">Première Propriété & Devise</h4>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                        Enregistrement de votre premier immeuble (nom, ville, devise financière FCFA / EUR et nombre estimé de lots).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-neutral-50 dark:bg-neutral-950 rounded-2xl border border-neutral-200/70 dark:border-neutral-800 flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                      3
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900 dark:text-white">Activation & Tutoriel Immédiat</h4>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                        Validation sécurisée de la base de données, connexion automatique et lancement direct du tutoriel guidé pas-à-pas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl text-sm"
+                  >
+                    Démarrer la configuration
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
             {/* STEP 1: Super Admin */}
             {step === 1 && (
               <motion.form
@@ -611,14 +714,45 @@ function SetupWizard({ onCompleted }: { onCompleted: (email: string, password?: 
                   </p>
                 </div>
 
-                <div className="pt-4">
+                <div className="bg-indigo-50/70 dark:bg-indigo-950/30 p-3.5 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 text-left flex items-start gap-3">
+                  <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-indigo-900 dark:text-indigo-300">
+                    Le <strong>tutoriel interactif</strong> se lancera automatiquement dès votre arrivée sur le tableau de bord pour vous guider pas-à-pas.
+                  </p>
+                </div>
+
+                <div className="pt-2 space-y-2.5">
                   <button
                     type="button"
-                    onClick={() => onCompleted(email, password)}
-                    className="w-full py-3.5 px-6 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl text-sm"
+                    onClick={handleDirectAccessAndTutorial}
+                    disabled={loggingIn}
+                    className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl shadow-indigo-600/20 text-sm disabled:opacity-50"
                   >
-                    Accéder à la connexion
-                    <ArrowRight className="w-4 h-4" />
+                    {loggingIn ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Connexion et chargement du tutoriel...
+                      </>
+                    ) : (
+                      <>
+                        Accéder au tableau de bord & Lancer le tutoriel
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        sessionStorage.setItem("anta_trigger_first_tutorial", "true");
+                      }
+                      onCompleted(email, password);
+                    }}
+                    disabled={loggingIn}
+                    className="w-full py-2.5 px-4 text-xs font-semibold text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors"
+                  >
+                    Ou aller à la page de connexion standard
                   </button>
                 </div>
               </motion.div>
@@ -670,13 +804,16 @@ function LoginForm() {
       });
 
       if (res?.error) {
-        setError("Identifiants incorrects. Veuillez vérifier votre adresse email et votre mot de passe.");
+        if (res.error === "CredentialsSignin") {
+          setError("Identifiants incorrects. Veuillez vérifier votre adresse email et votre mot de passe.");
+        } else {
+          setError(`Erreur de connexion (${res.error}). Veuillez réessayer.`);
+        }
       } else if (res?.ok) {
-        router.push("/");
-        router.refresh();
+        window.location.href = "/";
       }
-    } catch (err) {
-      setError("Une erreur est survenue lors de la connexion.");
+    } catch (err: any) {
+      setError(err?.message || "Une erreur inattendue est survenue lors de la connexion.");
     } finally {
       setLoading(false);
     }

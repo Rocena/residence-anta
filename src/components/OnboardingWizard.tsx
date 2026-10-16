@@ -17,11 +17,17 @@ export function OnboardingWizard() {
   useEffect(() => {
     setIsClient(true);
     
-    // Check if it's the first time
+    // Check if it's the first time or triggered after setup
+    const forceTutorial = typeof window !== "undefined" && sessionStorage.getItem("anta_trigger_first_tutorial") === "true";
     const done = localStorage.getItem("anta_tutorial_done");
-    if (!done) {
+
+    if (forceTutorial || !done) {
+      if (forceTutorial) {
+        sessionStorage.removeItem("anta_trigger_first_tutorial");
+        localStorage.removeItem("anta_tutorial_done");
+      }
       // Small delay so UI can paint first
-      const timer = setTimeout(() => setIsOpen(true), 1000);
+      const timer = setTimeout(() => setIsOpen(true), 800);
       return () => clearTimeout(timer);
     }
 

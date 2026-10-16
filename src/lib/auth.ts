@@ -115,41 +115,92 @@ export const authOptions: NextAuthOptions = {
             const parsedCookies = Object.fromEntries(
               cookieStr.split(";").map((c: string) => {
                 const parts = c.trim().split("=");
-                return [parts[0], decodeURIComponent(parts.slice(1).join("="))];
+                const key = parts[0];
+                const rawVal = parts.slice(1).join("=");
+                let decoded = rawVal;
+                try { decoded = decodeURIComponent(rawVal); } catch {}
+                return [key, decoded];
               })
             );
 
-            if (parsedCookies.anta_setup_admin) {
-              const sa = JSON.parse(parsedCookies.anta_setup_admin);
-              if (sa.email?.toLowerCase() === emailStr) {
-                userRecord = {
-                  id: sa.id || "usr-super-admin",
-                  name: sa.name,
-                  email: sa.email,
-                  passwordHash: sa.passwordHash,
-                  role: sa.role || "super_admin",
-                  residenceIds: sa.residenceIds || ["*"],
-                  isActive: true,
-                };
-              }
-            }
-
-            if (!userRecord && parsedCookies.anta_custom_users) {
-              const cuList = JSON.parse(parsedCookies.anta_custom_users);
-              if (Array.isArray(cuList)) {
-                const found = cuList.find((u: any) => u.email?.toLowerCase() === emailStr);
-                if (found) {
+            // 3.1 Check Base64 setup admin
+            if (parsedCookies.anta_setup_admin_b64) {
+              try {
+                const raw = Buffer.from(parsedCookies.anta_setup_admin_b64, "base64").toString("utf-8");
+                const sa = JSON.parse(raw);
+                if (sa.email?.toLowerCase() === emailStr) {
                   userRecord = {
-                    id: found.id || "usr-" + Date.now(),
-                    name: found.name,
-                    email: found.email,
-                    passwordHash: found.passwordHash,
-                    role: found.role || "gestionnaire",
-                    residenceIds: found.residenceIds || ["*"],
+                    id: sa.id || "usr-super-admin",
+                    name: sa.name,
+                    email: sa.email,
+                    passwordHash: sa.passwordHash,
+                    role: sa.role || "super_admin",
+                    residenceIds: sa.residenceIds || ["*"],
                     isActive: true,
                   };
                 }
-              }
+              } catch {}
+            }
+
+            // 3.2 Check JSON setup admin
+            if (!userRecord && parsedCookies.anta_setup_admin) {
+              try {
+                const sa = JSON.parse(parsedCookies.anta_setup_admin);
+                if (sa.email?.toLowerCase() === emailStr) {
+                  userRecord = {
+                    id: sa.id || "usr-super-admin",
+                    name: sa.name,
+                    email: sa.email,
+                    passwordHash: sa.passwordHash,
+                    role: sa.role || "super_admin",
+                    residenceIds: sa.residenceIds || ["*"],
+                    isActive: true,
+                  };
+                }
+              } catch {}
+            }
+
+            // 3.3 Check Base64 custom users
+            if (!userRecord && parsedCookies.anta_custom_users_b64) {
+              try {
+                const raw = Buffer.from(parsedCookies.anta_custom_users_b64, "base64").toString("utf-8");
+                const cuList = JSON.parse(raw);
+                if (Array.isArray(cuList)) {
+                  const found = cuList.find((u: any) => u.email?.toLowerCase() === emailStr);
+                  if (found) {
+                    userRecord = {
+                      id: found.id || "usr-" + Date.now(),
+                      name: found.name,
+                      email: found.email,
+                      passwordHash: found.passwordHash,
+                      role: found.role || "gestionnaire",
+                      residenceIds: found.residenceIds || ["*"],
+                      isActive: true,
+                    };
+                  }
+                }
+              } catch {}
+            }
+
+            // 3.4 Check JSON custom users
+            if (!userRecord && parsedCookies.anta_custom_users) {
+              try {
+                const cuList = JSON.parse(parsedCookies.anta_custom_users);
+                if (Array.isArray(cuList)) {
+                  const found = cuList.find((u: any) => u.email?.toLowerCase() === emailStr);
+                  if (found) {
+                    userRecord = {
+                      id: found.id || "usr-" + Date.now(),
+                      name: found.name,
+                      email: found.email,
+                      passwordHash: found.passwordHash,
+                      role: found.role || "gestionnaire",
+                      residenceIds: found.residenceIds || ["*"],
+                      isActive: true,
+                    };
+                  }
+                }
+              } catch {}
             }
           } catch (cErr) {
             console.warn("[Auth] Cookie parsing error:", cErr);

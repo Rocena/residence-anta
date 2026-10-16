@@ -1678,7 +1678,7 @@ export async function checkSetupStatusAction() {
     // 2. Check cookies
     const { cookies } = await import("next/headers");
     const cookieStore = await cookies();
-    if (cookieStore.get("anta_setup_completed")?.value === "true" || cookieStore.get("anta_setup_admin")?.value) {
+    if (cookieStore.get("anta_setup_completed")?.value === "true" || cookieStore.get("anta_setup_admin")?.value || cookieStore.get("anta_setup_admin_b64")?.value) {
       return { needsSetup: false };
     }
 
@@ -1766,7 +1766,7 @@ export async function completeFirstTimeSetupAction(formData: FormData) {
   try {
     const { cookies } = await import("next/headers");
     const cookieStore = await cookies();
-    cookieStore.set("anta_setup_admin", JSON.stringify({
+    const adminObj = {
       id: "usr-super-admin",
       name,
       email,
@@ -1774,7 +1774,16 @@ export async function completeFirstTimeSetupAction(formData: FormData) {
       role: "super_admin",
       residenceIds: ["*"],
       isActive: true,
-    }), {
+    };
+    const b64 = Buffer.from(JSON.stringify(adminObj)).toString("base64");
+    cookieStore.set("anta_setup_admin_b64", b64, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
+    cookieStore.set("anta_setup_admin", JSON.stringify(adminObj), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
