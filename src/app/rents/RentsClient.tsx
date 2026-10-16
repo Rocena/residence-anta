@@ -375,9 +375,10 @@ export default function RentsClient({
         </div>
       </div>
 
-      {/* Rents Table */}
+      {/* Rents Table Container */}
       <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-neutral-50 dark:bg-neutral-950/50 text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-800 text-xs">
               <tr>
@@ -474,6 +475,86 @@ export default function RentsClient({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Responsive Cards View */}
+        <div className="block sm:hidden divide-y divide-neutral-100 dark:divide-neutral-800">
+          {filteredRents.length === 0 ? (
+            <div className="p-8 text-center text-xs text-neutral-500">
+              Aucun enregistrement de loyer trouvé.
+            </div>
+          ) : (
+            filteredRents.map((rent) => {
+              const tenant = tenants.find((t) => t.id === rent.tenantId);
+              const unit = units.find((u) => u.id === rent.unitId || (tenant && u.id === tenant.unitId));
+              const isPaid = rent.status === "Payé" || rent.status === "Payéé" || rent.status === "PAID";
+              const paidAmount = Number(rent.amountPaid || (isPaid ? rent.amount : 0));
+              const dueAmount = Number(rent.amount);
+
+              return (
+                <div key={`mob-${rent.id}`} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-neutral-900 dark:text-white text-sm">
+                        {tenant ? tenant.name : "Locataire inconnu"}
+                      </h4>
+                      <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-1 mt-0.5">
+                        <Building2 className="w-3 h-3" />
+                        {unit ? unit.name : "Lot standard"} • {rent.month || rent.date?.slice(0, 7)}
+                      </p>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold text-[11px] border ${getStatusStyle(rent.status)}`}>
+                      {rent.status}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2.5 bg-neutral-50 dark:bg-neutral-950 rounded-xl text-xs">
+                    <div>
+                      <span className="text-[10px] text-neutral-400 block">Attendu</span>
+                      <span className="font-mono font-bold text-neutral-900 dark:text-white">
+                        {dueAmount.toLocaleString("fr-FR")} FCFA
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-neutral-400 block">Encaissé</span>
+                      <span className="font-mono font-bold text-emerald-600">
+                        {paidAmount.toLocaleString("fr-FR")} FCFA
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    {!isPaid && (
+                      <button
+                        onClick={() => setPayModal(rent)}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" /> Encaisser le loyer
+                      </button>
+                    )}
+                    {isPaid && (
+                      <>
+                        <button
+                          onClick={() => setSelectedReceipt({ rent, tenant, unit })}
+                          className="flex-1 py-2 px-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Quittance
+                        </button>
+                        <button
+                          disabled={emailSendingId === rent.id}
+                          onClick={() => handleSendEmailReceipt(rent.id)}
+                          className="py-2 px-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800 disabled:opacity-50"
+                        >
+                          {emailSendingId === rent.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                          Email
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </main>

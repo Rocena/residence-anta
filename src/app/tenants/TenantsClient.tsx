@@ -336,7 +336,8 @@ export default function TenantsClient({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-neutral-50 dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 font-medium border-b border-neutral-200 dark:border-neutral-800 text-xs">
               <tr>
@@ -452,6 +453,88 @@ export default function TenantsClient({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Responsive Cards View */}
+        <div className="block sm:hidden divide-y divide-neutral-100 dark:divide-neutral-800">
+          {filteredTenants.length === 0 ? (
+            <div className="p-8 text-center text-xs text-neutral-500">
+              Aucun locataire trouvé.
+            </div>
+          ) : (
+            filteredTenants.map((tenant) => {
+              const unit = units.find((u) => u.id === tenant.unitId || u.name === tenant.unitId);
+
+              return (
+                <div key={`mob-tenant-${tenant.id}`} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs uppercase shadow-sm">
+                        {tenant.name.substring(0, 2)}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-neutral-900 dark:text-white text-sm">
+                          {tenant.name}
+                        </h4>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                          Lot : <strong className="text-neutral-900 dark:text-white">{unit ? unit.name : tenant.unitId || "Non assigné"}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold text-[11px] border ${getBadgeColors(
+                        tenant.status
+                      )}`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(tenant.status)}`} />
+                      {tenant.status}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-neutral-50 dark:bg-neutral-950 rounded-xl space-y-1.5 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-neutral-400">Loyer mensuel</span>
+                      <span className="font-mono font-bold text-neutral-900 dark:text-white">
+                        {Number(tenant.rent || unit?.rent || 0).toLocaleString("fr-FR")} FCFA
+                      </span>
+                    </div>
+                    {tenant.phone && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-400">Téléphone</span>
+                        <a href={`tel:${tenant.phone}`} className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
+                          {tenant.phone}
+                        </a>
+                      </div>
+                    )}
+                    {tenant.email && (
+                      <div className="flex justify-between items-center truncate">
+                        <span className="text-neutral-400">Email</span>
+                        <a href={`mailto:${tenant.email}`} className="text-indigo-600 dark:text-indigo-400 truncate max-w-[180px]">
+                          {tenant.email}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <Link
+                      href={`/tenants/${tenant.id}`}
+                      className="flex-1 py-2 px-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> Fiche locataire
+                    </Link>
+                    <button
+                      onClick={() => setActiveDropdown(activeDropdown === tenant.id ? null : tenant.id)}
+                      className="py-2 px-3 bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-semibold text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 flex items-center gap-1"
+                    >
+                      Actions
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </main>
