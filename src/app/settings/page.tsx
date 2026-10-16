@@ -120,6 +120,8 @@ export default function SettingsPage() {
     } finally {
       setChangingPassword(false);
     }
+  };
+
   const handleSendTestEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!testEmailAddress || !testEmailAddress.includes("@")) {
@@ -535,6 +537,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </div>
         </div>
 
         {/* 2FA Modal */}
