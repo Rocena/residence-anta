@@ -1015,6 +1015,31 @@ export async function deleteResidenceAction(id: string) {
 
 export async function getUsersAction() {
   await requireRole(["super_admin", "admin", "proprietaire"]);
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const database = getDb();
+      const records = await database.select().from(pgUsers);
+      if (records && records.length > 0) {
+        return {
+          success: true,
+          data: records.map((u) => ({
+            id: String(u.id),
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            residenceIds: (u.residenceIds as string[]) || ["*"],
+            avatar: u.avatar || u.name.substring(0, 2).toUpperCase(),
+            isActive: u.isActive,
+            passwordHash: u.passwordHash,
+          })),
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("[getUsersAction] Postgres fetch failed, fallback to local:", err);
+  }
   return { success: true, data: db.getUsers() };
 }
 
@@ -1027,12 +1052,39 @@ export async function addUserAction(data: {
 }) {
   const currentUser = await requireRole(["super_admin", "admin", "proprietaire"]);
 
-  if (!data.name || !data.email || !data.role) {
+  if (!data.name?.trim() || !data.email?.trim() || !data.role?.trim()) {
     throw new Error("Nom, email et rôle obligatoires.");
   }
 
-  const existing = db.getUserByEmail(data.email);
-  if (existing) {
+  const cleanEmail = data.email.toLowerCase().trim();
+  const cleanName = data.name.trim();
+
+  // 1. Check if email exists in local store
+  const existingLocal = db.getUserByEmail(cleanEmail);
+
+  // 2. Check if email exists in PostgreSQL if configured
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const database = getDb();
+      const existingPg = await database
+        .select({ id: pgUsers.id })
+        .from(pgUsers)
+        .where(eq(pgUsers.email, cleanEmail))
+        .limit(1);
+
+      if (existingPg && existingPg.length > 0) {
+        throw new Error("Un compte existe déjà avec cette adresse email.");
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes("existe déjà")) throw err;
+    console.warn("[addUserAction] Postgres check failed:", err);
+  }
+
+  if (existingLocal) {
     throw new Error("Un compte existe déjà avec cette adresse email.");
   }
 
@@ -1040,12 +1092,45 @@ export async function addUserAction(data: {
   const passwordHash = await bcrypt.hash(rawPassword, 10);
 
   const newUser = db.addUser({
-    name: data.name,
-    email: data.email.toLowerCase().trim(),
+    name: cleanName,
+    email: cleanEmail,
     passwordHash,
     role: data.role,
     residenceIds: data.residenceIds || ["*"],
   });
+
+  // 3. Persist to PostgreSQL if configured
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const database = getDb();
+      await database
+        .insert(pgUsers)
+        .values({
+          name: cleanName,
+          email: cleanEmail,
+          passwordHash,
+          role: data.role,
+          residenceIds: data.residenceIds || ["*"],
+          isActive: true,
+          avatar: cleanName.substring(0, 2).toUpperCase(),
+        })
+        .onConflictDoUpdate({
+          target: pgUsers.email,
+          set: {
+            name: cleanName,
+            passwordHash,
+            role: data.role,
+            residenceIds: data.residenceIds || ["*"],
+            isActive: true,
+            avatar: cleanName.substring(0, 2).toUpperCase(),
+          },
+        });
+    }
+  } catch (dbErr) {
+    console.warn("[addUserAction] Could not insert to PostgreSQL:", dbErr);
+  }
 
   // Send welcome email
   emailService.sendWelcomeEmail({
@@ -1080,7 +1165,7 @@ export async function updateUserAction(id: string, data: {
   const currentUser = await requireRole(["super_admin", "admin", "proprietaire"]);
 
   const updates: any = {};
-  if (data.name) updates.name = data.name;
+  if (data.name) updates.name = data.name.trim();
   if (data.email) updates.email = data.email.toLowerCase().trim();
   if (data.role) updates.role = data.role;
   if (data.residenceIds) updates.residenceIds = data.residenceIds;
@@ -1089,6 +1174,28 @@ export async function updateUserAction(id: string, data: {
   }
 
   const updated = db.updateUser(id, updates);
+
+  // Sync to PostgreSQL if configured
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const database = getDb();
+      const targetEmail = updates.email || updated?.email;
+      const pgSet: any = {};
+      if (updates.name) pgSet.name = updates.name;
+      if (updates.role) pgSet.role = updates.role;
+      if (updates.residenceIds) pgSet.residenceIds = updates.residenceIds;
+      if (updates.passwordHash) pgSet.passwordHash = updates.passwordHash;
+
+      if (targetEmail) {
+        await database.update(pgUsers).set(pgSet).where(eq(pgUsers.email, targetEmail));
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[updateUserAction] PostgreSQL update error:", dbErr);
+  }
 
   if (typeof db.addActivityLog === "function") {
     db.addActivityLog({
@@ -1107,7 +1214,27 @@ export async function updateUserAction(id: string, data: {
 
 export async function deleteUserAction(id: string) {
   const currentUser = await requireRole(["super_admin", "admin"]);
+  const user = db.getUserById(id);
+  const targetEmail = user?.email;
+
   db.deleteUser(id);
+
+  // Sync to PostgreSQL if configured
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const database = getDb();
+      if (targetEmail) {
+        await database.delete(pgUsers).where(eq(pgUsers.email, targetEmail));
+      } else {
+        await database.delete(pgUsers).where(eq(pgUsers.id, id as any));
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[deleteUserAction] PostgreSQL delete error:", dbErr);
+  }
 
   if (typeof db.addActivityLog === "function") {
     db.addActivityLog({
@@ -1126,15 +1253,39 @@ export async function deleteUserAction(id: string) {
 export async function resetUserPasswordAction(userId: string) {
   const currentUser = await requireRole(["super_admin", "admin", "proprietaire"]);
   const user = db.getUserById(userId);
-  if (!user) throw new Error("Utilisateur introuvable.");
+  let targetEmail = user?.email;
 
   const tempPass = Math.random().toString(36).slice(-8) + "!9Z";
   const passwordHash = await bcrypt.hash(tempPass, 10);
 
-  db.resetUserPassword(userId, passwordHash);
+  if (user) {
+    db.resetUserPassword(userId, passwordHash);
+  }
 
-  // Send password reset email
-  await emailService.sendPasswordResetEmail(user.email, tempPass);
+  // Sync to PostgreSQL if configured
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const database = getDb();
+      if (targetEmail) {
+        await database.update(pgUsers).set({ passwordHash }).where(eq(pgUsers.email, targetEmail));
+      } else {
+        const found = await database.select().from(pgUsers).where(eq(pgUsers.id, userId as any)).limit(1);
+        if (found && found.length > 0) {
+          targetEmail = found[0].email;
+          await database.update(pgUsers).set({ passwordHash }).where(eq(pgUsers.id, userId as any));
+        }
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[resetUserPasswordAction] PostgreSQL update error:", dbErr);
+  }
+
+  if (targetEmail) {
+    await emailService.sendPasswordResetEmail(targetEmail, tempPass);
+  }
 
   if (typeof db.addActivityLog === "function") {
     db.addActivityLog({
@@ -1172,6 +1323,39 @@ export async function registerAccountAction(formData: FormData) {
     role,
     residenceIds: ["*"],
   });
+
+  // Sync to PostgreSQL if configured
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const database = getDb();
+      await database
+        .insert(pgUsers)
+        .values({
+          name,
+          email,
+          passwordHash,
+          role,
+          residenceIds: ["*"],
+          isActive: true,
+          avatar: name.substring(0, 2).toUpperCase(),
+        })
+        .onConflictDoUpdate({
+          target: pgUsers.email,
+          set: {
+            name,
+            passwordHash,
+            role,
+            residenceIds: ["*"],
+            isActive: true,
+            avatar: name.substring(0, 2).toUpperCase(),
+          },
+        });
+    }
+  } catch (dbErr) {
+    console.warn("[registerAccountAction] PostgreSQL sync error:", dbErr);
+  }
 
   emailService.sendWelcomeEmail({
     email: newUser.email,
@@ -1409,6 +1593,21 @@ export async function getEmailEngineStatusAction() {
 // ---- First-Time Setup Wizard Actions ----
 export async function checkSetupStatusAction() {
   try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+      const database = getDb();
+      const existingSuperAdmin = await database
+        .select({ id: pgUsers.id })
+        .from(pgUsers)
+        .where(eq(pgUsers.role, "super_admin"))
+        .limit(1);
+
+      if (existingSuperAdmin && existingSuperAdmin.length > 0) {
+        return { needsSetup: false };
+      }
+    }
     const completed = db.isSystemSetupCompleted();
     return { needsSetup: !completed };
   } catch (err) {
@@ -1448,24 +1647,40 @@ export async function completeFirstTimeSetupAction(formData: FormData) {
     if (isDatabaseConfigured()) {
       const { users: pgUsers, residences: pgResidences } = await import("@/db/schema");
       const database = getDb();
-      await database.insert(pgUsers).values({
-        name,
-        email,
-        passwordHash,
-        role: "super_admin",
-        residenceIds: ["*"],
-        isActive: true,
-        avatar: name.substring(0, 2).toUpperCase(),
-      }).onConflictDoNothing();
+      await database
+        .insert(pgUsers)
+        .values({
+          name,
+          email,
+          passwordHash,
+          role: "super_admin",
+          residenceIds: ["*"],
+          isActive: true,
+          avatar: name.substring(0, 2).toUpperCase(),
+        })
+        .onConflictDoUpdate({
+          target: pgUsers.email,
+          set: {
+            name,
+            passwordHash,
+            role: "super_admin",
+            residenceIds: ["*"],
+            isActive: true,
+            avatar: name.substring(0, 2).toUpperCase(),
+          },
+        });
 
-      await database.insert(pgResidences).values({
-        id: "RES-01",
-        name: residenceName,
-        address: `${city}, ${country}`,
-        city,
-        country,
-        managerName: name,
-      }).onConflictDoNothing();
+      await database
+        .insert(pgResidences)
+        .values({
+          reference: "RES-01",
+          name: residenceName,
+          address: `${city}, ${country}`,
+          city,
+          country,
+          managerName: name,
+        })
+        .onConflictDoNothing();
     }
   } catch (dbErr) {
     console.warn("[Setup] Could not insert to PostgreSQL:", dbErr);

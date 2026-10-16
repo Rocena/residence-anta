@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db, isDatabaseConfigured } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -11,7 +11,7 @@ export async function updatePassword(email: string, oldPass: string, newPass: st
     const cleanEmail = email.trim().toLowerCase();
 
     // 1. Try PostgreSQL
-    if (process.env.POSTGRES_URL) {
+    if (isDatabaseConfigured()) {
       try {
         const records = await db.select().from(users).where(eq(users.email, cleanEmail));
         const user = records[0];

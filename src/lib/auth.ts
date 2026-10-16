@@ -11,7 +11,7 @@ if (!process.env.NEXTAUTH_URL) {
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { db as drizzleDb } from "@/db";
+import { db as drizzleDb, isDatabaseConfigured } from "@/db";
 import { users as pgUsers, roles as pgRoles, rolePermissions as pgRolePerms, permissions as pgPerms } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import * as fileDb from "@/lib/db";
@@ -65,7 +65,7 @@ export const authOptions: NextAuthOptions = {
         } | null = null;
 
         // 1. Try Drizzle / PostgreSQL if configured
-        if (process.env.POSTGRES_URL) {
+        if (isDatabaseConfigured()) {
           try {
             const records = await drizzleDb
               .select({
@@ -73,8 +73,10 @@ export const authOptions: NextAuthOptions = {
                 name: pgUsers.name,
                 email: pgUsers.email,
                 passwordHash: pgUsers.passwordHash,
-                isActive: pgUsers.isActive,
+                role: pgUsers.role,
                 roleId: pgUsers.roleId,
+                residenceIds: pgUsers.residenceIds,
+                isActive: pgUsers.isActive,
                 roleName: pgRoles.name,
               })
               .from(pgUsers)
@@ -83,14 +85,15 @@ export const authOptions: NextAuthOptions = {
               .limit(1);
 
             if (records && records.length > 0 && records[0].isActive !== false) {
+              const u = records[0];
               userRecord = {
-                id: String(records[0].id),
-                name: records[0].name,
-                email: records[0].email,
-                passwordHash: records[0].passwordHash,
-                role: records[0].roleName || "gestionnaire",
-                residenceIds: ["*"],
-                isActive: records[0].isActive,
+                id: String(u.id),
+                name: u.name,
+                email: u.email,
+                passwordHash: u.passwordHash,
+                role: u.role || u.roleName || "gestionnaire",
+                residenceIds: (u.residenceIds as string[]) || ["*"],
+                isActive: u.isActive,
               };
             }
           } catch (dbErr) {
