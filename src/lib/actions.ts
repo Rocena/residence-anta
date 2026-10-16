@@ -1015,16 +1015,47 @@ export async function deleteResidenceAction(id: string) {
 
 export async function getUsersAction() {
   await requireRole(["super_admin", "admin", "proprietaire"]);
+  const userMap = new Map<string, any>();
+
+  // 1. From local DB
+  const localUsers = db.getUsers();
+  localUsers.forEach((u: any) => userMap.set(u.email?.toLowerCase(), u));
+
+  // 2. From cookies (stateless bridge)
   try {
-    const { isDatabaseConfigured, getDb } = await import("@/db");
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const setupAdminCookie = cookieStore.get("anta_setup_admin")?.value;
+    if (setupAdminCookie) {
+      try {
+        const sa = JSON.parse(setupAdminCookie);
+        if (sa.email) userMap.set(sa.email.toLowerCase(), sa);
+      } catch {}
+    }
+    const customUsersCookie = cookieStore.get("anta_custom_users")?.value;
+    if (customUsersCookie) {
+      try {
+        const cuList = JSON.parse(customUsersCookie);
+        if (Array.isArray(cuList)) {
+          cuList.forEach((cu: any) => {
+            if (cu.email) userMap.set(cu.email.toLowerCase(), cu);
+          });
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // 3. From PostgreSQL if configured
+  try {
+    const { isDatabaseConfigured, getDb, ensureSchema } = await import("@/db");
     if (isDatabaseConfigured()) {
+      await ensureSchema();
       const { users: pgUsers } = await import("@/db/schema");
       const database = getDb();
       const records = await database.select().from(pgUsers);
       if (records && records.length > 0) {
-        return {
-          success: true,
-          data: records.map((u) => ({
+        records.forEach((u) => {
+          userMap.set(u.email.toLowerCase(), {
             id: String(u.id),
             name: u.name,
             email: u.email,
@@ -1033,14 +1064,15 @@ export async function getUsersAction() {
             avatar: u.avatar || u.name.substring(0, 2).toUpperCase(),
             isActive: u.isActive,
             passwordHash: u.passwordHash,
-          })),
-        };
+          });
+        });
       }
     }
   } catch (err) {
     console.warn("[getUsersAction] Postgres fetch failed, fallback to local:", err);
   }
-  return { success: true, data: db.getUsers() };
+
+  return { success: true, data: Array.from(userMap.values()) };
 }
 
 export async function addUserAction(data: {
@@ -1064,8 +1096,9 @@ export async function addUserAction(data: {
 
   // 2. Check if email exists in PostgreSQL if configured
   try {
-    const { isDatabaseConfigured, getDb } = await import("@/db");
+    const { isDatabaseConfigured, getDb, ensureSchema } = await import("@/db");
     if (isDatabaseConfigured()) {
+      await ensureSchema();
       const { users: pgUsers } = await import("@/db/schema");
       const { eq } = await import("drizzle-orm");
       const database = getDb();
@@ -1101,8 +1134,9 @@ export async function addUserAction(data: {
 
   // 3. Persist to PostgreSQL if configured
   try {
-    const { isDatabaseConfigured, getDb } = await import("@/db");
+    const { isDatabaseConfigured, getDb, ensureSchema } = await import("@/db");
     if (isDatabaseConfigured()) {
+      await ensureSchema();
       const { users: pgUsers } = await import("@/db/schema");
       const database = getDb();
       await database
@@ -1130,6 +1164,36 @@ export async function addUserAction(data: {
     }
   } catch (dbErr) {
     console.warn("[addUserAction] Could not insert to PostgreSQL:", dbErr);
+  }
+
+  // 4. Save to cookies for stateless serverless resilience
+  try {
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    let customUsers: any[] = [];
+    const prevCookie = cookieStore.get("anta_custom_users")?.value;
+    if (prevCookie) {
+      try { customUsers = JSON.parse(prevCookie); } catch {}
+    }
+    customUsers = customUsers.filter((u: any) => u.email?.toLowerCase() !== cleanEmail);
+    customUsers.push({
+      id: newUser.id,
+      name: cleanName,
+      email: cleanEmail,
+      passwordHash,
+      role: data.role,
+      residenceIds: data.residenceIds || ["*"],
+      isActive: true,
+    });
+    cookieStore.set("anta_custom_users", JSON.stringify(customUsers), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
+  } catch (cErr) {
+    console.warn("[addUserAction] Cookie store error:", cErr);
   }
 
   // Send welcome email
@@ -1593,8 +1657,10 @@ export async function getEmailEngineStatusAction() {
 // ---- First-Time Setup Wizard Actions ----
 export async function checkSetupStatusAction() {
   try {
-    const { isDatabaseConfigured, getDb } = await import("@/db");
+    // 1. Check PostgreSQL if configured
+    const { isDatabaseConfigured, getDb, ensureSchema } = await import("@/db");
     if (isDatabaseConfigured()) {
+      await ensureSchema();
       const { users: pgUsers } = await import("@/db/schema");
       const { eq } = await import("drizzle-orm");
       const database = getDb();
@@ -1608,6 +1674,15 @@ export async function checkSetupStatusAction() {
         return { needsSetup: false };
       }
     }
+
+    // 2. Check cookies
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    if (cookieStore.get("anta_setup_completed")?.value === "true" || cookieStore.get("anta_setup_admin")?.value) {
+      return { needsSetup: false };
+    }
+
+    // 3. Check local file DB
     const completed = db.isSystemSetupCompleted();
     return { needsSetup: !completed };
   } catch (err) {
@@ -1643,8 +1718,9 @@ export async function completeFirstTimeSetupAction(formData: FormData) {
 
   // 2. Record in PostgreSQL if active
   try {
-    const { isDatabaseConfigured, getDb } = await import("@/db");
+    const { isDatabaseConfigured, getDb, ensureSchema } = await import("@/db");
     if (isDatabaseConfigured()) {
+      await ensureSchema();
       const { users: pgUsers, residences: pgResidences } = await import("@/db/schema");
       const database = getDb();
       await database
@@ -1684,6 +1760,36 @@ export async function completeFirstTimeSetupAction(formData: FormData) {
     }
   } catch (dbErr) {
     console.warn("[Setup] Could not insert to PostgreSQL:", dbErr);
+  }
+
+  // 3. Persist in cookies for guaranteed stateless persistence across serverless workers
+  try {
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    cookieStore.set("anta_setup_admin", JSON.stringify({
+      id: "usr-super-admin",
+      name,
+      email,
+      passwordHash,
+      role: "super_admin",
+      residenceIds: ["*"],
+      isActive: true,
+    }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
+    cookieStore.set("anta_setup_completed", "true", {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
+  } catch (cErr) {
+    console.warn("[Setup] Cookie store error:", cErr);
   }
 
   revalidatePath("/login");

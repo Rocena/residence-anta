@@ -123,7 +123,7 @@ function BackgroundSymbols() {
 }
 
 // First-Time Setup Wizard Component
-function SetupWizard({ onCompleted }: { onCompleted: (email: string) => void }) {
+function SetupWizard({ onCompleted }: { onCompleted: (email: string, password?: string) => void }) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -614,7 +614,7 @@ function SetupWizard({ onCompleted }: { onCompleted: (email: string) => void }) 
                 <div className="pt-4">
                   <button
                     type="button"
-                    onClick={() => onCompleted(email)}
+                    onClick={() => onCompleted(email, password)}
                     className="w-full py-3.5 px-6 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl text-sm"
                   >
                     Accéder à la connexion
@@ -719,9 +719,10 @@ function LoginForm() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 font-sans relative overflow-hidden">
         <BackgroundSymbols />
         <SetupWizard
-          onCompleted={(createdEmail) => {
+          onCompleted={(createdEmail, createdPassword) => {
             setNeedsSetup(false);
             setEmail(createdEmail);
+            if (createdPassword) setPassword(createdPassword);
             setMode("login");
           }}
         />

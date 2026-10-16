@@ -11,14 +11,14 @@ if (!process.env.NEXTAUTH_URL) {
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { db as drizzleDb, isDatabaseConfigured } from "@/db";
+import { db as drizzleDb, isDatabaseConfigured, ensureSchema } from "@/db";
 import { users as pgUsers, roles as pgRoles, rolePermissions as pgRolePerms, permissions as pgPerms } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import * as fileDb from "@/lib/db";
 
 // Memory rate limit per email (Upstash/Redis recommended for enterprise distributed setups)
 const rateLimitMap = new Map<string, { count: number; lastAttempt: number }>();
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 10;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 export const authOptions: NextAuthOptions = {
@@ -29,7 +29,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Mot de passe", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
@@ -39,19 +39,9 @@ export const authOptions: NextAuthOptions = {
         // Rate limiting check
         const now = Date.now();
         const limitRecord = rateLimitMap.get(emailStr);
-        if (limitRecord) {
-          if (now - limitRecord.lastAttempt < LOCKOUT_MS) {
-            if (limitRecord.count >= MAX_ATTEMPTS) {
-              console.warn(`Rate limit exceeded for ${emailStr}`);
-              throw new Error("Trop de tentatives. Veuillez réessayer plus tard.");
-            }
-            limitRecord.count += 1;
-            limitRecord.lastAttempt = now;
-          } else {
-            rateLimitMap.set(emailStr, { count: 1, lastAttempt: now });
-          }
-        } else {
-          rateLimitMap.set(emailStr, { count: 1, lastAttempt: now });
+        if (limitRecord && limitRecord.count >= MAX_ATTEMPTS && (now - limitRecord.lastAttempt < LOCKOUT_MS)) {
+          console.warn(`Rate limit exceeded for ${emailStr}`);
+          throw new Error("Trop de tentatives. Veuillez réessayer plus tard.");
         }
 
         let userRecord: {
@@ -67,6 +57,7 @@ export const authOptions: NextAuthOptions = {
         // 1. Try Drizzle / PostgreSQL if configured
         if (isDatabaseConfigured()) {
           try {
+            await ensureSchema();
             const records = await drizzleDb
               .select({
                 id: pgUsers.id,
@@ -117,11 +108,59 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
+        // 3. Fallback to incoming cookies (Stateless Vercel bridge when DB is fresh/initializing)
+        if (!userRecord && req?.headers?.cookie) {
+          try {
+            const cookieStr = req.headers.cookie;
+            const parsedCookies = Object.fromEntries(
+              cookieStr.split(";").map((c: string) => {
+                const parts = c.trim().split("=");
+                return [parts[0], decodeURIComponent(parts.slice(1).join("="))];
+              })
+            );
+
+            if (parsedCookies.anta_setup_admin) {
+              const sa = JSON.parse(parsedCookies.anta_setup_admin);
+              if (sa.email?.toLowerCase() === emailStr) {
+                userRecord = {
+                  id: sa.id || "usr-super-admin",
+                  name: sa.name,
+                  email: sa.email,
+                  passwordHash: sa.passwordHash,
+                  role: sa.role || "super_admin",
+                  residenceIds: sa.residenceIds || ["*"],
+                  isActive: true,
+                };
+              }
+            }
+
+            if (!userRecord && parsedCookies.anta_custom_users) {
+              const cuList = JSON.parse(parsedCookies.anta_custom_users);
+              if (Array.isArray(cuList)) {
+                const found = cuList.find((u: any) => u.email?.toLowerCase() === emailStr);
+                if (found) {
+                  userRecord = {
+                    id: found.id || "usr-" + Date.now(),
+                    name: found.name,
+                    email: found.email,
+                    passwordHash: found.passwordHash,
+                    role: found.role || "gestionnaire",
+                    residenceIds: found.residenceIds || ["*"],
+                    isActive: true,
+                  };
+                }
+              }
+            }
+          } catch (cErr) {
+            console.warn("[Auth] Cookie parsing error:", cErr);
+          }
+        }
+
         if (!userRecord) {
           return null; // User not found
         }
 
-        // 3. Password check
+        // 4. Password check
         let isPasswordValid = false;
         try {
           isPasswordValid = await bcrypt.compare(credentials.password, userRecord.passwordHash);
@@ -130,7 +169,37 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (!isPasswordValid) {
+          const prev = rateLimitMap.get(emailStr);
+          const newCount = (prev && (now - prev.lastAttempt < LOCKOUT_MS)) ? prev.count + 1 : 1;
+          rateLimitMap.set(emailStr, { count: newCount, lastAttempt: now });
           return null;
+        }
+
+        // Seamless sync to PostgreSQL if user was authenticated via cookie/file and DB is active
+        if (isDatabaseConfigured()) {
+          try {
+            await ensureSchema();
+            await drizzleDb.insert(pgUsers).values({
+              name: userRecord.name,
+              email: userRecord.email,
+              passwordHash: userRecord.passwordHash,
+              role: userRecord.role,
+              residenceIds: userRecord.residenceIds || ["*"],
+              isActive: true,
+              avatar: userRecord.name.substring(0, 2).toUpperCase(),
+            }).onConflictDoUpdate({
+              target: pgUsers.email,
+              set: {
+                name: userRecord.name,
+                passwordHash: userRecord.passwordHash,
+                role: userRecord.role,
+                residenceIds: userRecord.residenceIds || ["*"],
+                isActive: true,
+              }
+            });
+          } catch (syncErr) {
+            console.warn("[Auth] Background sync to PostgreSQL error:", syncErr);
+          }
         }
 
         // 4. Permissions resolution
