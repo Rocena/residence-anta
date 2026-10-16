@@ -1,6 +1,9 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+// Fallback to avoid MissingSecretError on Vercel if NEXTAUTH_SECRET is omitted in dashboard
+const secret = process.env.NEXTAUTH_SECRET || "anta-management-super-secure-production-secret-2026";
+
 // Define which path prefixes require which permission key
 const ROUTE_PERMISSIONS: Record<string, string> = {
   "/residence": "residence",
@@ -48,9 +51,14 @@ export const proxy = withAuth(
     return NextResponse.next();
   },
   {
+    secret,
     callbacks: {
       authorized: ({ req, token }) => {
-        const isAuthPage = req.nextUrl.pathname.startsWith("/login") || req.nextUrl.pathname.startsWith("/api/auth");
+        const path = req.nextUrl.pathname;
+        const isAuthPage = 
+          path.startsWith("/login") || 
+          path.startsWith("/api/auth") || 
+          path.startsWith("/reset-password");
         if (isAuthPage) return true;
         return !!token;
       },
@@ -60,6 +68,6 @@ export const proxy = withAuth(
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|login).*)"
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|login|reset-password).*)"
   ],
 };
