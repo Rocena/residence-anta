@@ -1406,3 +1406,74 @@ export async function getEmailEngineStatusAction() {
   };
 }
 
+// ---- First-Time Setup Wizard Actions ----
+export async function checkSetupStatusAction() {
+  try {
+    const completed = db.isSystemSetupCompleted();
+    return { needsSetup: !completed };
+  } catch (err) {
+    return { needsSetup: false };
+  }
+}
+
+export async function completeFirstTimeSetupAction(formData: FormData) {
+  const name = (formData.get("name") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  const password = formData.get("password") as string;
+  const residenceName = (formData.get("residenceName") as string)?.trim() || "Résidence ANTA Principale";
+  const city = (formData.get("city") as string)?.trim() || "Libreville";
+  const country = (formData.get("country") as string)?.trim() || "Gabon";
+  const currency = (formData.get("currency") as string)?.trim() || "XOF";
+  const estimatedUnits = Number(formData.get("estimatedUnits") || 10);
+
+  if (!name || !email || !password) {
+    return { success: false, error: "Veuillez renseigner tous les champs requis." };
+  }
+
+  if (password.length < 8) {
+    return { success: false, error: "Le mot de passe doit comporter au moins 8 caractères." };
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  // 1. Record in local database
+  db.completeSystemSetup({
+    superAdmin: { name, email, passwordHash },
+    residence: { name: residenceName, city, country, currency, unitsCount: estimatedUnits },
+  });
+
+  // 2. Record in PostgreSQL if active
+  try {
+    const { isDatabaseConfigured, getDb } = await import("@/db");
+    if (isDatabaseConfigured()) {
+      const { users: pgUsers, residences: pgResidences } = await import("@/db/schema");
+      const database = getDb();
+      await database.insert(pgUsers).values({
+        name,
+        email,
+        passwordHash,
+        role: "super_admin",
+        residenceIds: ["*"],
+        isActive: true,
+        avatar: name.substring(0, 2).toUpperCase(),
+      }).onConflictDoNothing();
+
+      await database.insert(pgResidences).values({
+        id: "RES-01",
+        name: residenceName,
+        address: `${city}, ${country}`,
+        city,
+        country,
+        managerName: name,
+      }).onConflictDoNothing();
+    }
+  } catch (dbErr) {
+    console.warn("[Setup] Could not insert to PostgreSQL:", dbErr);
+  }
+
+  revalidatePath("/login");
+  revalidatePath("/");
+  return { success: true, email };
+}
+
+

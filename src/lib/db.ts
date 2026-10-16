@@ -28,6 +28,9 @@ const ALL_MODULES = [
 
 // Default initial state with multi-property support and seeded users
 const defaultData = {
+  systemConfig: {
+    isInitialized: false,
+  },
   residences: [
     {
       id: 'RES-01',
@@ -1548,3 +1551,84 @@ export function updateRolePermissions(rolePermissions: any) {
   };
   writeDB(data);
 }
+
+// ---- First-Time Setup Wizard ----
+export function isSystemSetupCompleted(): boolean {
+  const data = readDB();
+  return !!data.systemConfig?.isInitialized;
+}
+
+export function completeSystemSetup(payload: {
+  superAdmin: { name: string; email: string; passwordHash: string };
+  residence?: { name: string; city: string; country: string; unitsCount?: number; currency?: string };
+}) {
+  const data = readDB();
+  if (!data.systemConfig) {
+    data.systemConfig = { isInitialized: false };
+  }
+
+  const existingIndex = (data.users || []).findIndex(
+    (u: any) => u.email.toLowerCase() === payload.superAdmin.email.toLowerCase()
+  );
+
+  const superAdminUser = {
+    id: existingIndex >= 0 ? data.users[existingIndex].id : 'usr-super-' + Date.now(),
+    reference: 'USR-SUPER',
+    name: payload.superAdmin.name,
+    email: payload.superAdmin.email.toLowerCase(),
+    passwordHash: payload.superAdmin.passwordHash,
+    role: 'super_admin',
+    residenceIds: ['*'],
+    isActive: true,
+    isInitialSetupAdmin: true,
+    avatar: payload.superAdmin.name.substring(0, 2).toUpperCase(),
+    createdAt: new Date().toISOString(),
+  };
+
+  if (existingIndex >= 0) {
+    data.users[existingIndex] = { ...data.users[existingIndex], ...superAdminUser };
+  } else {
+    data.users = [superAdminUser, ...(data.users || [])];
+  }
+
+  if (payload.residence?.name) {
+    const existingResIndex = (data.residences || []).findIndex(
+      (r: any) => r.name.toLowerCase() === payload.residence!.name.toLowerCase()
+    );
+    const residenceObj = {
+      id: existingResIndex >= 0 ? data.residences[existingResIndex].id : 'RES-01',
+      reference: 'RES-01',
+      name: payload.residence.name,
+      address: `${payload.residence.city}, ${payload.residence.country}`,
+      city: payload.residence.city,
+      country: payload.residence.country,
+      managerName: payload.superAdmin.name,
+      currency: payload.residence.currency || 'XOF',
+      createdAt: new Date().toISOString(),
+    };
+    if (existingResIndex >= 0) {
+      data.residences[existingResIndex] = { ...data.residences[existingResIndex], ...residenceObj };
+    } else {
+      data.residences = [residenceObj, ...(data.residences || [])];
+    }
+  }
+
+  data.systemConfig.isInitialized = true;
+  data.systemConfig.superAdminEmail = payload.superAdmin.email.toLowerCase();
+  data.systemConfig.setupCompletedAt = new Date().toISOString();
+
+  writeDB(data);
+
+  if (typeof addActivityLog === 'function') {
+    addActivityLog({
+      userId: superAdminUser.id,
+      action: 'SYSTEM_SETUP',
+      details: `Initialisation de la plateforme par le Super Administrateur ${superAdminUser.email}`,
+      user: superAdminUser.name,
+      userRole: 'super_admin',
+    });
+  }
+
+  return { success: true, user: superAdminUser };
+}
+
