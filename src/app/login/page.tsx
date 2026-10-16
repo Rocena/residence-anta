@@ -768,6 +768,7 @@ function SetupWizard({ onCompleted }: { onCompleted: (email: string, password?: 
 function LoginForm() {
   const searchParams = useSearchParams();
   const resetSuccessParam = searchParams.get("reset") === "success";
+  const timeoutParam = searchParams.get("timeout") === "true";
 
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -910,6 +911,16 @@ function LoginForm() {
                     <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-medium border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-300 flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
                       <span>Votre mot de passe a été réinitialisé ! Connectez-vous avec vos nouveaux identifiants.</span>
+                    </div>
+                  )}
+
+                  {timeoutParam && (
+                    <div className="p-3 bg-amber-50 text-amber-900 rounded-xl text-xs font-medium border border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-300 flex items-start gap-2.5">
+                      <Lock className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                      <div>
+                        <strong className="block font-semibold">Session verrouillée par sécurité</strong>
+                        <span>Votre session a expiré suite à une période d'inactivité pour protéger vos données. Reconnectez-vous pour continuer.</span>
+                      </div>
                     </div>
                   )}
 

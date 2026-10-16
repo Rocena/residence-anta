@@ -7,6 +7,7 @@ import TopBar from "@/components/TopBar";
 import { UserProvider } from "@/context/UserContext";
 import { Providers } from "@/components/Providers";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { SessionInactivityHandler } from "@/components/SessionInactivityHandler";
 import PendingTasksAlerts from "@/components/PendingTasksAlerts";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -32,13 +33,14 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Providers>
-          <UserProvider>
-            <TranslationProvider />
-            <OnboardingWizard />
-            <TopBar />
-            <PendingTasksAlerts />
-            {children}
-          </UserProvider>
+            <UserProvider>
+              <TranslationProvider />
+              <OnboardingWizard />
+              <SessionInactivityHandler />
+              <TopBar />
+              <PendingTasksAlerts />
+              {children}
+            </UserProvider>
           </Providers>
         </ThemeProvider>
       </body>
