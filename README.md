@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ANTA Management Platform
 
-## Getting Started
+Plateforme web moderne de gestion immobilière multi-propriétés développée avec **Next.js 16 (App Router & Turbopack)**, **PostgreSQL (Drizzle ORM)** et **NextAuth.js**.
 
-First, run the development server:
+## 🚀 Fonctionnalités Clés
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+* **Multi-Propriétés** : Gestion multi-résidences (`RES-01`, `RES-02`, etc.) avec assignation granulaire des utilisateurs par le Super Admin et sélecteur dynamique dans la barre de navigation.
+* **Sécurité & Authentification** : Rôles stricts (`super_admin`, `admin`, `gestionnaire`, `proprietaire`, `comptable`, `technicien`), mots de passe hachés avec `bcryptjs`, flux de réinitialisation sécurisé par token temporaire (1 heure).
+* **Gestion des Loyers & Finances** : Calculs automatiques des impayés, acomptes, soldes restants, bilans financiers et trésorerie nette.
+* **Moteur d'Email Open-Source & SMTP** : Support de n'importe quel serveur SMTP (Stalwart, Mailcow, Postfix, Gmail, Brevo) et mode de prévisualisation web immédiate avec Nodemailer Ethereal.
+* **Exports Professionnels** : Quittances de loyer au format PDF certifié (`jspdf`), tableurs financiers Excel multi-onglets (`xlsx`), exports Grand Livre CSV UTF-8 avec BOM, et archives comptables ZIP (`jszip`).
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Stack Technique
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+* **Framework** : Next.js 16.3.5 (Turbopack, App Router)
+* **Langage** : TypeScript 5
+* **Base de données** : PostgreSQL via Drizzle ORM (`pg.Pool`)
+* **Authentification** : NextAuth.js v4 (Stratégie JWT & Middleware de permissions)
+* **Email** : Nodemailer (SMTP standard & Ethereal)
+* **Styling & UI** : Tailwind CSS, Framer Motion, Lucide Icons
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📦 Installation & Démarrage Local
 
-## Learn More
+1. **Cloner le projet** :
+   ```bash
+   git clone https://github.com/Rocena/residence-anta.git
+   cd residence-anta
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+2. **Installer les dépendances** :
+   ```bash
+   npm install
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. **Lancer le serveur de développement** :
+   ```bash
+   npm run dev
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+4. **Accéder à l'application** :  
+   Ouvrez [http://localhost:3000](http://localhost:3000)
 
-## Deploy on Vercel
+## 🌐 Déploiement sur Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Le projet est configuré pour un déploiement direct et sans accroc sur Vercel avec prise en charge automatique de Turbopack.
