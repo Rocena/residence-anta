@@ -127,16 +127,20 @@ export default function ProjectDetailClient({ initialProject }: { initialProject
             </p>
           </div>
 
-          {isPending && isOwnerOrAdmin && (
-            <button 
-              onClick={handleValidateProject}
-              disabled={isUpdating}
-              className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
-            >
-              <CheckCircle2 className="h-4 w-4" /> 
-              {isUpdating ? "Validation..." : "Valider le projet"}
-            </button>
-          )}
+          {isPending ? (
+              isOwnerOrAdmin ? (
+                <button 
+                  onClick={handleValidateProject}
+                  disabled={isUpdating}
+                  className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> 
+                  {isUpdating ? "Validation..." : "Valider le projet"}
+                </button>
+              ) : (
+                <span className="text-xs text-neutral-400 italic border border-neutral-200 dark:border-neutral-800 px-3 py-1.5 rounded-lg">En attente de validation par le propriétaire</span>
+              )
+            ) : null}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-neutral-100 dark:divide-neutral-800">

@@ -10,6 +10,6 @@ export default {
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.POSTGRES_URL || 'postgres://anta:password@localhost:5432/anta_db',
+    url: process.env.DATABASE_URL || 'postgres://anta:password@localhost:5432/anta_db',
   }
 } satisfies Config;

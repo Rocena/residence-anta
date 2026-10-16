@@ -1,6 +1,6 @@
 "use client";
 
-import { Wallet, TrendingUp, TrendingDown, BarChart3, PieChart as PieChartIcon, Download, UploadCloud, FileText, CheckCircle2 } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, BarChart3, PieChart as PieChartIcon, Download, UploadCloud, FileText, CheckCircle2, AlertTriangle, ShieldCheck, DollarSign } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 import { useState } from "react";
 import { addDepositAction } from "@/lib/actions";
@@ -9,26 +9,78 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899'];
 
-export default function FinanceClient({ rents, expenses, tenants, deposits, transfers = [] }: { rents: any[], expenses: any[], tenants: any[], deposits: any[], transfers?: any[] }) {
-  const {  user , logActivity } = useUser();
+export default function FinanceClient({ 
+  rents, 
+  expenses, 
+  tenants, 
+  deposits, 
+  transfers = [] 
+}: { 
+  rents: any[], 
+  expenses: any[], 
+  tenants: any[], 
+  deposits: any[], 
+  transfers?: any[] 
+}) {
+  const { user, logActivity, selectedResidenceId } = useUser();
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  // Stats computation
-  const totalRevenus = rents.filter(r => r.status === 'Payé').reduce((acc, curr) => acc + curr.amount, 0);
-  const totalDepenses = expenses.filter(e => e.status === "Payé" || e.status === "Validé").reduce((acc, curr) => acc + curr.amount, 0);
-  const totalTransfers = transfers.reduce((acc, curr) => acc + curr.amount, 0);
-  const totalValidated = expenses.filter(e => e.status === "Validé").reduce((acc, curr) => acc + curr.amount, 0);
-  const fondsAJustifier = totalTransfers - totalValidated;
+  // Filter items by property if selected
+  const filteredRents = rents.filter(r => {
+    if (selectedResidenceId === 'all') return true;
+    if (r.residenceId) return r.residenceId === selectedResidenceId;
+    const tenant = tenants.find(t => t.id === r.tenantId);
+    return tenant ? (!tenant.residenceId || tenant.residenceId === selectedResidenceId) : true;
+  });
+
+  const filteredExpenses = expenses.filter(e => {
+    if (selectedResidenceId === 'all') return true;
+    return !e.residenceId || e.residenceId === selectedResidenceId;
+  });
+
+  const filteredDeposits = deposits.filter(d => {
+    if (selectedResidenceId === 'all') return true;
+    return !d.residenceId || d.residenceId === selectedResidenceId;
+  });
+
+  const filteredTransfers = transfers.filter(trf => {
+    if (selectedResidenceId === 'all') return true;
+    return !trf.residenceId || trf.residenceId === selectedResidenceId;
+  });
+
+  // Accurate stats computation
+  const totalRevenus = filteredRents.reduce((acc, curr) => {
+    if (curr.status === 'Payé') return acc + (curr.amount || 0);
+    if (curr.amountPaid && curr.amountPaid > 0) return acc + curr.amountPaid;
+    return acc;
+  }, 0);
+
+  const totalDepenses = filteredExpenses
+    .filter(e => e.status === "Payé" || e.status === "Fonds reçus" || e.status === "Validé")
+    .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
   const soldeNet = totalRevenus - totalDepenses;
 
-  const totalRentsCollected = rents.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0);
-  const totalDeposited = deposits.reduce((acc, curr) => acc + (curr.amountCalculated || curr.amount || 0), 0);
-  const fondsDetenus = totalRentsCollected - totalDeposited;
+  // Fonds Détenus (rents collected not yet deposited to the bank)
+  const totalRentsCollected = filteredRents.reduce((acc, curr) => {
+    if (curr.status === 'Payé') return acc + (curr.amount || 0);
+    return acc + (curr.amountPaid || 0);
+  }, 0);
 
+  const totalDeposited = filteredDeposits.reduce((acc, curr) => acc + (curr.amountCalculated || curr.amount || 0), 0);
+  const fondsDetenus = Math.max(0, totalRentsCollected - totalDeposited);
+
+  // Fonds Caisse à Justifier (funds transferred to petty cash minus validated/paid expenses)
+  const totalTransfers = filteredTransfers.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+  const totalValidatedExpenses = filteredExpenses
+    .filter(e => e.status === "Validé" || e.status === "Fonds reçus" || e.status === "Payé")
+    .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+  const fondsAJustifier = Math.max(0, totalTransfers - totalValidatedExpenses);
 
   // Chart data
-  const expensesByCategory = expenses.reduce((acc, curr) => {
-    acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
+  const expensesByCategory = filteredExpenses.reduce((acc, curr) => {
+    const cat = curr.category || "Autre";
+    acc[cat] = (acc[cat] || 0) + (curr.amount || 0);
     return acc;
   }, {} as any);
   
@@ -39,12 +91,11 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
   }));
 
   // Trends calculation
-  const paymentDelays = rents.filter(r => r.status === 'Payé').map(r => {
-    // Expected date is usually 5th of the month
+  const paymentDelays = filteredRents.filter(r => r.status === 'Payé').map(r => {
     const monthStr = r.month;
     if (!monthStr) return null;
     const expectedDate = new Date(`${monthStr}-05`).getTime();
-    const actualDate = new Date(r.date).getTime();
+    const actualDate = new Date(r.date || r.paymentDate || `${monthStr}-05`).getTime();
     const delayDays = Math.max(0, Math.floor((actualDate - expectedDate) / (1000 * 60 * 60 * 24)));
     
     return {
@@ -63,8 +114,8 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
 
   // Suggestions logic
   const lateTenants = avgDelays.filter(t => t.avgDelay >= 5);
-  const isSalaryBlocked = expenses.some(e => e.title === "Salaire Calvin" && e.status === "Bloqué" && e.month === currentMonth);
-  const depositsThisMonth = deposits.filter(d => d.month === currentMonth);
+  const isSalaryBlocked = filteredExpenses.some(e => e.title?.toLowerCase().includes("salaire") && e.status === "Bloqué" && e.month === currentMonth);
+  const depositsThisMonth = filteredDeposits.filter(d => d.month === currentMonth || d.date?.startsWith(currentMonth));
 
   // Modal state
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -75,9 +126,13 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     formData.append("createdBy", user?.name || "Inconnu");
+    if (selectedResidenceId && selectedResidenceId !== 'all') {
+      formData.append("residenceId", selectedResidenceId);
+    }
     
     try {
       await addDepositAction(formData);
+      logActivity('CREATE', `A enregistré un versement bancaire`);
       setShowDepositModal(false);
     } catch (err) {
       alert("Erreur lors de l'enregistrement du versement");
@@ -87,27 +142,39 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
   };
 
   const exportCSV = () => {
-    let csv = "Date,Type,Description,Montant,Statut\n";
-    rents.filter(r => r.status === 'Payé').forEach(r => {
-      const t = tenants.find(t => t.id === r.tenantId);
-      csv += `${r.date},Revenu,Loyer ${t?.name},${r.amount},Encaissé\n`;
+    let csv = "Date,Type,Description,Montant (FCFA),Statut\n";
+    
+    filteredRents.forEach(r => {
+      const t = tenants.find(tenant => tenant.id === r.tenantId);
+      const amount = r.status === 'Payé' ? r.amount : (r.amountPaid || 0);
+      if (amount > 0) {
+        csv += `"${r.date || r.month || '-' }","Revenu Loyer","${t ? t.name : 'Inconnu'} (${r.month})",${amount},"${r.status}"\n`;
+      }
     });
-    expenses.forEach(e => {
-      csv += `${e.date},Dépense,${e.title},${e.amount},${e.status}\n`;
+
+    filteredExpenses.forEach(e => {
+      csv += `"${e.date || e.month || '-' }","Dépense","${(e.title || e.description || '').replace(/"/g, '""')}",${e.amount || 0},"${e.status}"\n`;
     });
-    deposits.forEach(d => {
-      csv += `${d.date},Versement en Banque,${d.description},${d.amount},Validé\n`;
+
+    filteredDeposits.forEach(d => {
+      csv += `"${d.date || d.month || '-' }","Versement Banque","${(d.description || '').replace(/"/g, '""')}",${d.amount || 0},"Validé"\n`;
+    });
+
+    filteredTransfers.forEach(trf => {
+      csv += `"${trf.date || '-' }","Transfert Caisse","${(trf.reference || '')} - ${(trf.beneficiary || '')}",${trf.amount || 0},"Validé"\n`;
     });
     
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "Grand_Livre_Comptable.csv");
+    link.setAttribute("download", `Grand_Livre_Comptable_${new Date().toISOString().slice(0, 10)}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -120,18 +187,18 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
               <Wallet className="h-6 w-6 text-teal-600" />
               Finances & Prévisions
             </h1>
-            <p className="text-neutral-500 dark:text-neutral-400 mt-1">Analyse des paiements, trésorerie et grand livre comptable.</p>
+            <p className="text-neutral-500 dark:text-neutral-400 mt-1">Analyse des encaissements, prévisions de trésorerie et grand livre comptable.</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <button 
               onClick={() => setShowDepositModal(true)}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-medium shadow-sm transition-colors text-sm"
             >
               <UploadCloud className="h-4 w-4" /> Versement en Banque
             </button>
             <button 
               onClick={exportCSV}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-900 dark:text-neutral-50 border border-neutral-200 dark:border-neutral-800 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-900 dark:text-neutral-50 border border-neutral-200 dark:border-neutral-800 px-4 py-2 rounded-xl font-medium shadow-sm transition-colors text-sm"
             >
               <Download className="h-4 w-4" /> Grand Livre (CSV)
             </button>
@@ -150,113 +217,156 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
                   <li key={t.name}>Le locataire <strong>{t.name}</strong> paie avec une moyenne de {t.avgDelay} jours de retard. <em>Suggestion : Mettre en place un rappel automatique le 2 du mois.</em></li>
                 ))
               ) : (
-                <li>Tous les locataires paient à l'heure en moyenne. Excellente tendance de recouvrement.</li>
+                <li>Tous les locataires enregistrés paient dans les délais prévus. Excellente dynamique de recouvrement.</li>
               )}
               {depositsThisMonth.length === 0 && (
-                <li className="text-rose-600 dark:text-rose-400 font-medium">Aucun versement bancaire n'a été effectué ce mois-ci. Attention au blocage des dépenses après le 15.</li>
+                <li className="text-rose-600 dark:text-rose-400 font-medium">Aucun versement bancaire n'a encore été enregistré ce mois-ci. Les dépenses non urgentes risquent d'être bloquées.</li>
               )}
               {depositsThisMonth.length > 0 && (
-                <li className="text-emerald-600 dark:text-emerald-400 font-medium">{depositsThisMonth.length} versement(s) effectué(s) ce mois-ci. Les dépenses sont autorisées.</li>
+                <li className="text-emerald-600 dark:text-emerald-400 font-medium">{depositsThisMonth.length} versement(s) bancaire(s) effectué(s) ce mois-ci. Les dépenses sont autorisées.</li>
               )}
             </ul>
           </div>
           
-          <div className={`${isSalaryBlocked ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'} border rounded-xl p-5 shadow-sm`}>
-            <h3 className={`font-bold mb-2 flex items-center gap-2 ${isSalaryBlocked ? 'text-rose-900' : 'text-emerald-900'}`}>
+          <div className={`${isSalaryBlocked ? 'bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900' : 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900'} border rounded-xl p-5 shadow-sm`}>
+            <h3 className={`font-bold mb-2 flex items-center gap-2 ${isSalaryBlocked ? 'text-rose-900 dark:text-rose-400' : 'text-emerald-900 dark:text-emerald-400'}`}>
               <TrendingUp className="h-5 w-5" /> Statut Recouvrement 100%
             </h3>
             {isSalaryBlocked ? (
-              <p className="text-sm text-rose-800">
-                L'objectif de recouvrement à 100% n'est pas encore atteint pour ce mois-ci. <strong>Le salaire du gestionnaire (Calvin) est actuellement bloqué</strong>.
+              <p className="text-sm text-rose-800 dark:text-rose-300">
+                L'objectif de recouvrement à 100% n'est pas encore atteint pour ce mois-ci. <strong>Le salaire du gestionnaire (Calvin) est conditionnellement en attente</strong>.
               </p>
             ) : (
-              <p className="text-sm text-emerald-800">
-                L'objectif de recouvrement est atteint ou en bonne voie (aucun blocage en cours). Le système de paie récurrente est validable.
+              <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                L'objectif de recouvrement est atteint ou en bonne voie (aucun blocage en cours). Le système de paie conditionnelle est conforme.
               </p>
             )}
           </div>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 dark:text-emerald-500 font-medium mb-2">
-                <TrendingUp className="h-5 w-5" /> Total Encaissé
-              </div>
-              <p className="text-3xl font-bold text-neutral-900 dark:text-neutral-50">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(totalRevenus)}</p>
+        {/* 5 KPIs Section */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          {/* Total Encaissé */}
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium text-xs mb-2">
+              <TrendingUp className="h-4 w-4" /> Total Encaissé
             </div>
+            <p className="text-xl font-bold text-neutral-900 dark:text-neutral-50 font-mono">
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(totalRevenus)}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1">Loyers & acomptes perçus</p>
           </div>
-          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 dark:text-rose-500 font-medium mb-2">
-                <TrendingDown className="h-5 w-5" /> Dépenses
-              </div>
-              <p className="text-3xl font-bold text-neutral-900 dark:text-neutral-50">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(totalDepenses)}</p>
+
+          {/* Dépenses */}
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-medium text-xs mb-2">
+              <TrendingDown className="h-4 w-4" /> Dépenses
             </div>
+            <p className="text-xl font-bold text-neutral-900 dark:text-neutral-50 font-mono">
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(totalDepenses)}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1">Payées & validées</p>
           </div>
-          <div className="bg-teal-600 rounded-2xl p-6 shadow-md shadow-teal-600/20 text-white flex flex-col justify-between relative overflow-hidden">
-             <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-             <div>
-              <div className="flex items-center gap-2 font-medium mb-2 opacity-90">
-                <Wallet className="h-5 w-5" /> Trésorerie Nette
-              </div>
-              <p className="text-3xl font-bold">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(soldeNet)}</p>
+
+          {/* Trésorerie Nette */}
+          <div className="bg-teal-600 rounded-2xl p-5 shadow-sm text-white relative overflow-hidden">
+            <div className="flex items-center gap-2 font-medium text-xs mb-2 opacity-90">
+              <Wallet className="h-4 w-4" /> Trésorerie Nette
             </div>
+            <p className="text-xl font-bold font-mono">
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(soldeNet)}
+            </p>
+            <p className="text-[11px] opacity-80 mt-1">Revenus − Dépenses</p>
+          </div>
+
+          {/* Fonds Détenus (à verser en banque) */}
+          <div className={`rounded-2xl p-5 shadow-sm border ${
+            fondsDetenus > 0 
+              ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900' 
+              : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800'
+          }`}>
+            <div className={`flex items-center gap-2 font-medium text-xs mb-2 ${
+              fondsDetenus > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-500'
+            }`}>
+              <AlertTriangle className="h-4 w-4" /> Fonds Détenus
+            </div>
+            <p className={`text-xl font-bold font-mono ${
+              fondsDetenus > 0 ? 'text-amber-800 dark:text-amber-300' : 'text-neutral-900 dark:text-neutral-50'
+            }`}>
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(fondsDetenus)}
+            </p>
+            <p className="text-[11px] text-neutral-500 mt-1">En attente de versement bancaire</p>
+          </div>
+
+          {/* Fonds Caisse à Justifier */}
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-medium text-xs mb-2">
+              <ShieldCheck className="h-4 w-4" /> Fonds à Justifier
+            </div>
+            <p className="text-xl font-bold text-neutral-900 dark:text-neutral-50 font-mono">
+              {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(fondsAJustifier)}
+            </p>
+            <p className="text-[11px] text-neutral-400 mt-1">Solde caisse opérationnelle</p>
           </div>
         </div>
 
         {/* Breakdown & Ledger */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Charts */}
-          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-sm flex flex-col col-span-1 h-[400px]">
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-50 flex items-center gap-2 mb-6">
-              <PieChartIcon className="h-5 w-5 text-amber-500" /> Répartition Dépenses
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-sm flex flex-col col-span-1 h-[420px]">
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-50 flex items-center gap-2 mb-4">
+              <PieChartIcon className="h-5 w-5 text-amber-500" /> Répartition des Dépenses
             </h3>
             <div className="flex-1 w-full min-h-0 flex items-center justify-center relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Tooltip />
-                  <Pie
-                    data={expensesData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={5}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {expensesData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Legend layout="horizontal" verticalAlign="bottom" align="center" />
-                </PieChart>
-              </ResponsiveContainer>
+              {expensesData.length === 0 ? (
+                <p className="text-neutral-400 text-sm">Aucune dépense à afficher.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip />
+                    <Pie
+                      data={expensesData}
+                      cx="50%"
+                      cy="45%"
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {expensesData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Legend layout="horizontal" verticalAlign="bottom" align="center" />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
           {/* Ledger / Recent Deposits */}
-          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-6 shadow-sm flex flex-col col-span-1 lg:col-span-2 h-[400px] overflow-hidden">
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-sm flex flex-col col-span-1 lg:col-span-2 h-[420px] overflow-hidden">
             <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-50 flex items-center gap-2 mb-4">
               <FileText className="h-5 w-5 text-indigo-500" /> Versements Bancaires (Justificatifs)
             </h3>
             <div className="flex-1 overflow-y-auto pr-2">
-              <div className="space-y-4">
-                {deposits.length === 0 ? (
-                  <p className="text-sm text-neutral-500 text-center py-8">Aucun versement enregistré.</p>
-                ) : deposits.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(d => (
-                  <div key={d.id} className="flex justify-between items-center p-4 border border-neutral-100 dark:border-neutral-800 rounded-lg bg-neutral-50 dark:bg-neutral-900/50">
+              <div className="space-y-3">
+                {filteredDeposits.length === 0 ? (
+                  <p className="text-sm text-neutral-500 text-center py-12">Aucun versement enregistré pour cette sélection.</p>
+                ) : filteredDeposits.sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime()).map(d => (
+                  <div key={d.id} className="flex justify-between items-center p-4 border border-neutral-100 dark:border-neutral-800 rounded-xl bg-neutral-50 dark:bg-neutral-900/50 hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50 transition-colors">
                     <div>
                       <h4 className="font-medium text-sm text-neutral-900 dark:text-white">Versement - {d.description}</h4>
-                      <p className="text-xs text-neutral-500">{new Date(d.date).toLocaleDateString('fr-FR')} • Par {d.createdBy}</p>
+                      <p className="text-xs text-neutral-500 mt-0.5">{d.date ? new Date(d.date).toLocaleDateString('fr-FR') : '-'} • Par {d.createdBy || 'Système'}</p>
                     </div>
-                    <div className="text-right flex items-center gap-4">
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(d.amount)}</span>
-                      {d.fileUrl ? (
-                        <a href={d.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors">
-                          <FileText className="h-3.5 w-3.5" /> Voir Justificatif
+                    <div className="text-right flex items-center gap-3">
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                        {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(d.amount || 0)}
+                      </span>
+                      {d.fileUrl || d.proofUrl ? (
+                        <a href={d.fileUrl || d.proofUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
+                          <FileText className="h-3.5 w-3.5" /> Bordereau
                         </a>
                       ) : (
                         <span className="text-xs text-neutral-400 italic">Aucun fichier</span>
@@ -278,7 +388,7 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-neutral-900 rounded-xl shadow-xl w-full max-w-md overflow-hidden"
+              className="bg-white dark:bg-neutral-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-neutral-200 dark:border-neutral-800"
             >
               <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex justify-between items-center bg-indigo-50 dark:bg-indigo-900/20">
                 <h3 className="font-bold text-indigo-900 dark:text-indigo-400">Enregistrer un versement bancaire</h3>
@@ -286,22 +396,22 @@ export default function FinanceClient({ rents, expenses, tenants, deposits, tran
               </div>
               <form onSubmit={handleDepositSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Montant versé (FCFA)</label>
-                  <input type="number" name="amount" required className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-transparent" />
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Montant versé (FCFA) <span className="text-rose-500">*</span></label>
+                  <input type="number" name="amount" required className="w-full px-4 py-2.5 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-transparent outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm font-mono" placeholder="Ex: 500000" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Description / Réf. Bancaire</label>
-                  <input type="text" name="description" required className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-transparent" placeholder="Ex: Versement loyers semaine 1" />
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Description / Réf. Bancaire <span className="text-rose-500">*</span></label>
+                  <input type="text" name="description" required className="w-full px-4 py-2.5 border border-neutral-300 dark:border-neutral-700 rounded-xl bg-transparent outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm" placeholder="Ex: Versement loyers octobre - BNDE" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Justificatif (Bordereau / Reçu)</label>
-                  <input type="file" name="file" required accept=".pdf,image/*" className="w-full text-sm text-neutral-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Bordereau / Reçu (PDF ou Image)</label>
+                  <input type="file" name="file" accept=".pdf,image/*" className="w-full text-sm text-neutral-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
                   <p className="text-xs text-neutral-500 mt-2">Le document sera consultable par les gestionnaires et le propriétaire.</p>
                 </div>
                 
-                <div className="pt-4 flex justify-end gap-3">
-                  <button type="button" onClick={() => setShowDepositModal(false)} className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-lg">Annuler</button>
-                  <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-2">
+                <div className="pt-4 flex justify-end gap-3 border-t border-neutral-100 dark:border-neutral-800">
+                  <button type="button" onClick={() => setShowDepositModal(false)} className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-xl">Annuler</button>
+                  <button type="submit" disabled={loading} className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-2 shadow-sm">
                     {loading ? "Chargement..." : <><UploadCloud className="h-4 w-4" /> Sauvegarder</>}
                   </button>
                 </div>

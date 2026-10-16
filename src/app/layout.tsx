@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { TranslationProvider } from "@/components/TranslationProvider";
 import TopBar from "@/components/TopBar";
 import { UserProvider } from "@/context/UserContext";
+import { Providers } from "@/components/Providers";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import PendingTasksAlerts from "@/components/PendingTasksAlerts";
 
@@ -30,6 +31,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <Providers>
           <UserProvider>
             <TranslationProvider />
             <OnboardingWizard />
@@ -37,6 +39,7 @@ export default function RootLayout({
             <PendingTasksAlerts />
             {children}
           </UserProvider>
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

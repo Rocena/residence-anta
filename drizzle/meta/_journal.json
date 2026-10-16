@@ -8,6 +8,20 @@
       "when": 1789753971021,
       "tag": "0000_supreme_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790607285416,
+      "tag": "0001_small_jackal",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792143203479,
+      "tag": "0002_fantastic_wasp",
+      "breakpoints": true
     }
   ]
 }
